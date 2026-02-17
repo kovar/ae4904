@@ -1,0 +1,30 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Claude Code
+.claude/
+
+# GitHub
+.github/
+
+# Editors
+.vscode/
+.zed/
+.idea/
+
+# Ruff
+.ruff_cache/
+
+# Marimo
+.marimo/
+
+# Rust
+target/

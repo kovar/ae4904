@@ -1,0 +1,20 @@
+[project]
+name = "edac"
+version = "0.1.0"
+description = "Error Detection and Correction Package"
+readme = "README.md"
+authors = [
+    { name = "Jiri Kovar", email = "j.kovar@student.tudelft.nl" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "galois>=0.4.10",
+]
+
+[project.scripts]
+edac = "edac:main"
+prototype = "edac.prototype:main"
+
+[build-system]
+requires = ["uv_build>=0.10.2,<0.11.0"]
+build-backend = "uv_build"
