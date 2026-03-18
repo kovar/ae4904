@@ -4,10 +4,14 @@ version = "0.1.0"
 description = "Code for AE4904 Detailed Design Project"
 readme = "README.md"
 requires-python = ">=3.14"
-dependencies = []
+dependencies = [
+    "marimo>=0.21.0",
+]
 
 [tool.uv.workspace]
-members = ["packages/*"]
+members = [
+    "packages/*",
+]
 
 [tool.uv.sources]
 edac = { workspace = true }

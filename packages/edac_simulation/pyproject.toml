@@ -1,0 +1,13 @@
+[project]
+name = "edac-simulation"
+version = "0.1.0"
+description = "EDAC simulation for COTS NAND Flash in a 600 km SSO CubeSat (AE4904)"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+    "galois>=0.3.8",
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+    "tqdm>=4.65",
+]

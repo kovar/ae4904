@@ -25,6 +25,13 @@ wheels/
 
 # Marimo
 .marimo/
+notebooks/__marimo__/
 
 # Rust
 target/
+
+# Results
+results/
+
+# macOS
+.DS_Store
