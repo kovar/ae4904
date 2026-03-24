@@ -19,8 +19,8 @@ ORBIT_PERIOD_S = 5765.0  # ~96 min for 600 km SSO
 
 # SEU rate per bit per day, derived directly from SPENVIS output.
 # Two candidate values — select the active one below.
-SEU_RATE_BIT_DAY_V1 = 1.4e-7  # initial SPENVIS estimate
-SEU_RATE_BIT_DAY_V2 = 2.8775e-6  # revised SPENVIS value
+SEU_RATE_BIT_DAY_V1 = 1.40e-7  # initial SPENVIS estimate
+SEU_RATE_BIT_DAY_V2 = 2.88e-6  # revised SPENVIS value
 SEU_RATE_BIT_DAY_V3 = 3.09e-9  # mission-average SEU rate
 
 SEU_RATE_BIT_DAY = SEU_RATE_BIT_DAY_V3  # <-- active value
