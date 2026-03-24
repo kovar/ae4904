@@ -116,9 +116,21 @@ class NANDFlashModel:
         if len(flat_bit_addresses) == 0:
             return
         page_indices = flat_bit_addresses // self.page_bits
-        bit_indices = flat_bit_addresses % self.page_bits
-        self._stored[page_indices, bit_indices] ^= True
-        # Update error counts for affected pages
+        # numpy fancy-indexing XOR with repeated indices only applies the
+        # operation once (last write wins), so two SEUs at the same address
+        # would not cancel.  Count occurrences and keep only odd-count addresses
+        # so that an even number of hits at one bit correctly cancel out.
+        flat_unique, counts = np.unique(flat_bit_addresses, return_counts=True)
+        net_addresses = flat_unique[counts % 2 == 1]
+        if len(net_addresses) == 0:
+            self.stats["total_injected_errors"] += len(flat_bit_addresses)
+            return
+        net_page_indices = net_addresses // self.page_bits
+        net_bit_indices = net_addresses % self.page_bits
+        self._stored[net_page_indices, net_bit_indices] ^= True
+        # Update error counts for all pages that had any activity (even if
+        # net flips cancelled — their error count won't have changed but
+        # recomputing is cheap and correct).
         affected_pages = np.unique(page_indices)
         for p in affected_pages:
             self._error_count[p] = int(np.sum(self._stored[p] != self._reference[p]))

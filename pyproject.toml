@@ -10,8 +10,18 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pytest>=8.0",
     "ruff>=0.9",
     "ty>=0.0.0a1",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["packages/edac_simulation"]
+testpaths = ["packages/edac_simulation/tests"]
+markers = ["slow: marks tests as slow (deselect with -m 'not slow')"]
+filterwarnings = [
+    # galois library uses its own deprecated Field() alias internally
+    "ignore::DeprecationWarning:galois",
 ]
 
 [tool.uv.workspace]

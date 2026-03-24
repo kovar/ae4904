@@ -6,7 +6,7 @@ requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.24",
     "scipy>=1.10",
-    "galois>=0.3.8",
+    "galois>=0.4.10,<0.5",
     "matplotlib>=3.7",
     "pandas>=2.0",
     "tqdm>=4.65",

@@ -23,6 +23,7 @@ CHECKS = [
     (["uv", "run", "ruff", "check", "packages/"], "ruff lint"),
     (["uv", "run", "ruff", "format", "--check", "packages/"], "ruff format"),
     (["uv", "run", "ty", "check", "packages/"], "ty type check"),
+    (["uv", "run", "pytest", "-m", "not slow", "-q"], "pytest (fast)"),
 ]
 
 
