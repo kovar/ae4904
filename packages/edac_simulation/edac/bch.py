@@ -170,7 +170,7 @@ class BCHCodec:
                 full_corrected = data.copy()
                 full_corrected[:n_copy] = corrected
                 return full_corrected, int(n_errors), False
-            except galois.DecodingError:
+            except galois.DecodingError:  # type: ignore[attr-defined]
                 return data.copy(), -1, True
 
         else:

@@ -221,10 +221,51 @@ def verification_matrix(monte_carlo_summary: dict, save: bool = True) -> pd.Data
     s = monte_carlo_summary
     max_ber = s.get("max_ber_full_memory", float("nan"))
 
+    scrub_bw_fraction = config.TOTAL_BITS / (
+        config.SCRUB_PERIOD_S * config.INTERFACE_THROUGHPUT_BPS
+    )
     rows = [
         {
+            "Requirement": "REQ-01",
+            "Description": "64 GB usable storage",
+            "Verification Method": "Component selection + datasheet",
+            "Result / Evidence": (
+                f"{config.NAND_NUM_CHIPS}x Micron MT29F256G08 = "
+                f"{config.NAND_TOTAL_CAPACITY_GB} GB"
+            ),
+            "Status": "PASS",
+        },
+        {
+            "Requirement": "REQ-02",
+            "Description": "20 Mbps net payload throughput after EDAC overhead",
+            "Verification Method": "Bandwidth budget (simulation config)",
+            "Result / Evidence": (
+                f"Scrubbing uses {scrub_bw_fraction:.1%} of {config.INTERFACE_THROUGHPUT_BPS / 1e6:.0f} Mbps "
+                f"at {config.SCRUB_PERIOD_HOURS:.0f}h scrub period "
+                f"(allocated: {config.SCRUB_BANDWIDTH_FRACTION:.0%}; "
+                f"max allowed period: {config.TOTAL_BITS / (config.INTERFACE_THROUGHPUT_BPS * config.SCRUB_BANDWIDTH_FRACTION) / 3600:.1f}h)"
+            ),
+            "Status": "PASS"
+            if scrub_bw_fraction <= config.SCRUB_BANDWIDTH_FRACTION
+            else "FAIL",
+        },
+        {
+            "Requirement": "REQ-03",
+            "Description": "PCB within PC-104 / <90x90x15 mm",
+            "Verification Method": "KiCad PCB layout (external)",
+            "Result / Evidence": "Verified in KiCad design files (outside simulation scope)",
+            "Status": "TBD",
+        },
+        {
+            "Requirement": "REQ-04",
+            "Description": "SEL detection + power cut within 10 µs",
+            "Verification Method": "LTSpice/NGSpice transient simulation (external)",
+            "Result / Evidence": "Verified in circuit simulation files (outside simulation scope)",
+            "Status": "TBD",
+        },
+        {
             "Requirement": "REQ-05",
-            "Description": "EDAC corrects expected bit-flip rate",
+            "Description": "EDAC corrects expected bit-flip rate for target orbit",
             "Verification Method": "Simulation (fault injection + scrubbing)",
             "Result / Evidence": (
                 f"BCH(t={config.BCH_T}) corrected {s.get('mean_corrected_per_trial', 0):.1e} "
@@ -233,20 +274,30 @@ def verification_matrix(monte_carlo_summary: dict, save: bool = True) -> pd.Data
             "Status": "PASS" if s.get("mean_corrected_per_trial", 0) > 0 else "TBD",
         },
         {
-            "Requirement": "REQ-06",
+            "Requirement": "REQ-06 (BBM)",
+            "Description": "Bad Block Management table for damaged sectors",
+            "Verification Method": "TBD",
+            "Result / Evidence": "Not yet simulated",
+            "Status": "TBD",
+        },
+        {
+            "Requirement": "REQ-06 (BER)",
             "Description": "Uncorrectable BER < 10⁻¹²",
             "Verification Method": f"Monte Carlo simulation ({s['config']['n_trials']} trials)",
             "Result / Evidence": (
-                f"Max BER = {max_ber:.2e} over 2-year mission "
+                f"Max BER = {max_ber:.2e} over {config.MISSION_DURATION_YEARS}-year mission "
                 f"({config.NAND_TOTAL_CAPACITY_GB} GB scaled)"
             ),
             "Status": "PASS" if s.get("req06_pass", False) else "FAIL",
         },
         {
             "Requirement": "REQ-07",
-            "Description": "Design verified via simulation scripts",
+            "Description": "Design verified via simulation reproducing SEU/SEL faults",
             "Verification Method": "Code review + reproducibility",
-            "Result / Evidence": "Python scripts in edac_simulation/; seed-locked RNG",
+            "Result / Evidence": (
+                "Python scripts in edac_simulation/; seed-locked RNG; "
+                "SEU injection + scrubbing demonstrated"
+            ),
             "Status": "PASS",
         },
     ]
@@ -282,6 +333,8 @@ def quick_demo() -> None:
     print("Quick demo: 50-trial Monte Carlo with default scrub period ...")
     summary = run_monte_carlo(n_trials=50, scrub_period_s=config.SCRUB_PERIOD_S)
     verification_matrix(summary)
+    if summary.get("scrub_log"):
+        plot_error_accumulation(summary["scrub_log"])
 
     print("\nScrub-period sweep (3 periods, 20 trials each) ...")
     sweep = scrub_period_sweep(periods_hours=[6, 24, 72], n_trials=20)
@@ -327,6 +380,8 @@ if __name__ == "__main__":
             plot_ber_vs_scrub_period(data["sweep"])
         else:
             verification_matrix(data)
+            if data.get("scrub_log"):
+                plot_error_accumulation(data["scrub_log"])
         plt.show()
     else:
         print("Use --quick for a demo run, or --results <file> to plot saved data.")

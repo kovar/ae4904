@@ -21,10 +21,9 @@ errors, or block-level wear — none of which are in scope for this simulation.
 
 from __future__ import annotations
 
+import config
 import numpy as np
 from numpy.random import Generator
-
-import config
 
 
 class NANDFlashModel:
@@ -118,15 +117,6 @@ class NANDFlashModel:
             return
         page_indices = flat_bit_addresses // self.page_bits
         bit_indices = flat_bit_addresses % self.page_bits
-        # XOR each affected bit
-        np.add.at(
-            self._stored.view(
-                np.uint8
-            ),  # operate in-place via uint8 view not possible for bool
-            (page_indices, bit_indices),
-            True,
-        )  # bool XOR via addition mod 2
-        # Fix: numpy bool XOR with add.at doesn't work cleanly — use loop-free indexing:
         self._stored[page_indices, bit_indices] ^= True
         # Update error counts for affected pages
         affected_pages = np.unique(page_indices)

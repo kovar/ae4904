@@ -112,11 +112,15 @@ def run_monte_carlo(
         unit="trial",
         dynamic_ncols=True,
     )
+    first_scrub_log: list[dict] | None = None
     for seed in bar:
         trial = run_one_trial(
             scrub_period_s=scrub_period_s, seed=int(seed), seu_rate_bit_s=seu_rate_bit_s
         )
-        trial.pop("scrub_log", None)
+        if first_scrub_log is None:
+            first_scrub_log = trial.pop("scrub_log", None)
+        else:
+            trial.pop("scrub_log", None)
         trials.append(trial)
 
         # Update postfix with running stats
@@ -169,6 +173,8 @@ def run_monte_carlo(
         "raw_uncorr_pages": uncorr_pages.tolist(),
         "raw_ber_full": ber_full.tolist(),
         "raw_corrected": total_corr.tolist(),
+        # -- single trial scrub log for error-accumulation plot --
+        "scrub_log": first_scrub_log,
     }
 
     if verbose:

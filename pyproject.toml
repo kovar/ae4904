@@ -8,6 +8,12 @@ dependencies = [
     "marimo>=0.21.0",
 ]
 
+[dependency-groups]
+dev = [
+    "ruff>=0.9",
+    "ty>=0.0.0a1",
+]
+
 [tool.uv.workspace]
 members = [
     "packages/*",
