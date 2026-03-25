@@ -123,16 +123,7 @@ class TestScrubBandwidth:
             Scrubber.scrub_overhead_fraction(period_s), expected, rel_tol=1e-9
         )
 
-    def test_configured_period_exceeds_allocated_bandwidth(self) -> None:
-        """
-        REQ-02 FAIL: the 24 h default scrub period uses more bandwidth than the
-        20 % allocation allows.  Max compliant period is ~38.2 h.
-
-        This test documents the known design issue tracked in TASK_TRACKER.md.
-        A design change (longer scrub period or larger BW allocation) is needed
-        before the requirement can be marked PASS.
-        """
+    def test_configured_period_within_allocated_bandwidth(self) -> None:
+        """REQ-02 PASS: the 72 h scrub period uses less bandwidth than the 20 % allocation."""
         frac = Scrubber.scrub_overhead_fraction(config.SCRUB_PERIOD_S)
-        assert frac > config.SCRUB_BANDWIDTH_FRACTION, (
-            "REQ-02 is now satisfied — update TASK_TRACKER.md and remove this assertion"
-        )
+        assert frac <= config.SCRUB_BANDWIDTH_FRACTION

@@ -114,47 +114,63 @@ class FaultInjector:
 
     def breaking_point_sweep(
         self,
-        ber_values: np.ndarray | None = None,
-        n_trials_per_ber: int = 50,
+        scrub_periods_s: np.ndarray | None = None,
+        seu_rate_bit_s: float = config.SEU_RATE_BIT_S,
+        n_trials_per_period: int = 50,
         uncorr_threshold: float = 0.01,
     ) -> list[dict]:
         """
-        Sweep injected BER and find the point at which EDAC fails.
+        Sweep scrub period at a fixed SEU rate and find the period at which EDAC fails.
 
-        For each BER value:
+        For each scrub period:
           1. Reset memory to clean state with random data.
-          2. Inject errors at the given BER.
+          2. Inject errors accumulated over one scrub period:
+             p_flip = seu_rate_bit_s * scrub_period_s
           3. Run one scrub pass.
           4. Record fraction of uncorrectable pages.
 
+        The breaking point is the scrub period at which the mean fraction of
+        uncorrectable pages exceeds uncorr_threshold.
+
         Parameters
         ----------
-        ber_values : array of BER values to sweep (default: log-space 1e-10 to 1e-2)
-        n_trials_per_ber : number of independent trials per BER point
-        uncorr_threshold : fraction of uncorrectable pages that defines "failure"
+        scrub_periods_s   : array of scrub periods to sweep [s].
+                            Defaults to log-space from 1 h up to 10x the
+                            analytical BCH capacity limit.
+        seu_rate_bit_s    : SEU rate [bit⁻¹ s⁻¹] (default: config value)
+        n_trials_per_period : independent trials per period point
+        uncorr_threshold  : uncorrectable page fraction that defines "failure"
 
         Returns
         -------
-        list of dicts, one per BER point, with keys:
-            ber, mean_uncorr_fraction, std_uncorr_fraction,
+        list of dicts, one per period, with keys:
+            scrub_period_s, p_flip, seu_rate_bit_s,
+            mean_uncorr_fraction, std_uncorr_fraction,
             mean_corrected, breaking_point (bool)
         """
-        if ber_values is None:
-            ber_values = np.logspace(-10, -2, 40)
+        if scrub_periods_s is None:
+            # Auto-scale upper bound to 10x the analytical breaking-point period
+            # (period at which expected errors/sector = BCH_T)
+            sector_bits = config.SECTOR_DATA_BYTES * 8
+            breaking_estimate_s = config.BCH_T / (sector_bits * seu_rate_bit_s)
+            max_s = min(10 * breaking_estimate_s, 365 * 24 * 3600)
+            scrub_periods_s = np.logspace(np.log10(3600), np.log10(max_s), 40)
 
         results = []
         breaking_found = False
 
-        for ber in ber_values:
+        for period_s in scrub_periods_s:
+            # Accumulated bit-flip probability over one scrub period
+            p_flip = seu_rate_bit_s * period_s
             uncorr_fractions = []
             corrected_counts = []
 
-            for _ in range(n_trials_per_ber):
+            for _ in range(n_trials_per_period):
                 self.memory.reset()
                 self.memory.fill_random()
                 self.scrubber._ecc_store = self.scrubber._initial_encode_all()
 
-                self.inject_at_ber(ber)
+                self.inject_at_ber(p_flip)
                 r = self.evaluate_single_pass()
 
                 frac_uncorr = (
@@ -174,7 +190,9 @@ class FaultInjector:
 
             results.append(
                 {
-                    "ber": ber,
+                    "scrub_period_s": period_s,
+                    "p_flip": p_flip,
+                    "seu_rate_bit_s": seu_rate_bit_s,
                     "mean_uncorr_fraction": mean_uncorr,
                     "std_uncorr_fraction": std_uncorr,
                     "mean_corrected": mean_corr,

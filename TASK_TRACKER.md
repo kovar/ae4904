@@ -23,19 +23,11 @@ Hardware deliverables (KiCad, LTSpice, report) are tracked separately.
 - [x] galois DeprecationWarning suppressed; galois pinned to `>=0.4.10,<0.5`
 - [x] BER units corrected to `/bit/s` throughout (was dimensionless)
 - [x] **Bad Block Management simulation (REQ-06 BBM)** — `BadBlockManager` class added; factory bad blocks (Binomial, 2%) + runtime bad blocks from scrub events; spare pool (3% = 983 blocks/chip); wired into Monte Carlo; verification matrix REQ-06 BBM row shows PASS
+- [x] **REQ-02 resolved** — scrub period increased to 72 h (10.6% of 20 Mbps, within 20% allocation); breaking-point analysis reworked to sweep scrub period at mission SEU rate instead of dimensionless BER sweep
 
 ---
 
 ## Remaining
-
-### Design issue flagged
-
-- [ ] **REQ-02 FAIL at 24h scrub period** — simulation reports FAIL.
-  At 24h, scrubbing consumes 31.8% of the 20 Mbps interface, exceeding the 20% allocation.
-  Max compliant scrub period at 20% allocation: **38.2 h**.
-  Options: increase scrub period to ≥ 38h, increase the allocation fraction in config, or
-  confirm that scrubbing does not share the OBC interface (separate internal bus). Needs
-  team discussion before the report is finalised.
 
 ### Potential / undecided
 

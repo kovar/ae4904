@@ -62,7 +62,7 @@ BCH_ECC_BYTES_PER_SECTOR = 7  # Exact value set by galois library
 # ---------------------------------------------------------------------------
 # Scrubbing parameters  — key trade-off variable; sweep in analysis
 # ---------------------------------------------------------------------------
-SCRUB_PERIOD_HOURS = 24.0  # Default; swept in analysis
+SCRUB_PERIOD_HOURS = 72.0  # Default; swept in analysis
 SCRUB_PERIOD_S = SCRUB_PERIOD_HOURS * 3600.0
 
 # Interface throughput available for scrubbing (fraction of REQ-02 20 Mbps)

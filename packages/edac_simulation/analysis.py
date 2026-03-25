@@ -154,31 +154,35 @@ def plot_error_accumulation(scrub_log: list[dict], save: bool = True) -> plt.Fig
 
 def plot_breaking_point(sweep_data: list[dict], save: bool = True) -> plt.Figure:
     """
-    Plot fraction of uncorrectable pages vs. injected BER.
+    Plot fraction of uncorrectable pages vs. scrub period.
 
     Parameters
     ----------
     sweep_data : output of FaultInjector.breaking_point_sweep()
     """
-    bers = np.array([d["ber"] for d in sweep_data])
+    periods_h = np.array([d["scrub_period_s"] / 3600 for d in sweep_data])
     uncorr_frac = np.array([d["mean_uncorr_fraction"] for d in sweep_data])
     uncorr_std = np.array([d["std_uncorr_fraction"] for d in sweep_data])
+    seu_rate = sweep_data[0]["seu_rate_bit_s"]
 
-    # Chip-specific reference BER values (Micron MT29F256G08 SLC NAND)
-    # Datasheet guaranteed raw BER: ~1e-6 (fresh) to ~1e-3 (end-of-life)
-    CHIP_BER_FRESH = 1e-6
-    CHIP_BER_EOL = 1e-3
+    # Bandwidth limit: max period at which a full scrub pass fits within the
+    # allocated bandwidth fraction (same formula as REQ-02 check)
+    bw_limit_h = (
+        config.TOTAL_BITS
+        / (config.INTERFACE_THROUGHPUT_BPS * config.SCRUB_BANDWIDTH_FRACTION)
+        / 3600
+    )
 
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.semilogx(
-        bers,
+        periods_h,
         uncorr_frac * 100,
         "o-",
         color="steelblue",
         label="Mean uncorrectable page fraction",
     )
     ax.fill_between(
-        bers,
+        periods_h,
         (uncorr_frac - uncorr_std) * 100,
         (uncorr_frac + uncorr_std) * 100,
         alpha=0.2,
@@ -188,40 +192,43 @@ def plot_breaking_point(sweep_data: list[dict], save: bool = True) -> plt.Figure
     # Mark the breaking point
     for d in sweep_data:
         if d["breaking_point"]:
+            bp_h = d["scrub_period_s"] / 3600
             ax.axvline(
-                d["ber"],
+                bp_h,
                 color="red",
                 linestyle="--",
                 linewidth=1.5,
-                label=f"Breaking point ≈ {d['ber']:.1e} bit⁻¹",
+                label=f"EDAC breaking point ≈ {bp_h:.0f} h",
             )
             break
 
-    # Chip operating range
+    # Design scrub period
     ax.axvline(
-        CHIP_BER_FRESH,
+        config.SCRUB_PERIOD_HOURS,
         color="green",
         linestyle=":",
-        linewidth=1.2,
-        label=f"MT29F256G08 fresh BER ≈ {CHIP_BER_FRESH:.0e} bit⁻¹",
+        linewidth=1.5,
+        label=f"Design scrub period ({config.SCRUB_PERIOD_HOURS:.0f} h)",
     )
+
+    # Bandwidth limit
     ax.axvline(
-        CHIP_BER_EOL,
+        bw_limit_h,
         color="goldenrod",
-        linestyle=":",
-        linewidth=1.2,
-        label=f"MT29F256G08 EOL BER ≈ {CHIP_BER_EOL:.0e} bit⁻¹",
+        linestyle="-.",
+        linewidth=1.5,
+        label=f"Bandwidth limit ({bw_limit_h:.1f} h, REQ-02)",
     )
 
     ax.axhline(
         1.0, color="orange", linestyle=":", linewidth=1, label="1 % failure threshold"
     )
-    ax.set_xlabel("Injected BER [bit⁻¹]")
+    ax.set_xlabel("Scrub Period [hours]")
     ax.set_ylabel("Uncorrectable Pages [%]")
     ax.set_title(
-        f"Fault Injection Breaking-Point Analysis\n"
+        f"EDAC Breaking-Point vs. Scrub Period\n"
         f"BCH(t={config.BCH_T}) / {config.SECTOR_DATA_BYTES}-byte sector, "
-        f"Micron MT29F256G08 SLC NAND"
+        f"SEU rate = {seu_rate:.1e} bit⁻¹ s⁻¹"
     )
     ax.legend(fontsize=9)
     ax.set_ylim(bottom=0)
@@ -385,8 +392,8 @@ def quick_demo() -> None:
     scrubber = Scrubber(memory, codec)
     injector = FaultInjector(memory, codec, scrubber, rng=rng)
     bp_data = injector.breaking_point_sweep(
-        ber_values=np.logspace(-6, -3, 30),  # MT29F256G08 fresh → EOL operating range
-        n_trials_per_ber=10,
+        seu_rate_bit_s=config.SEU_RATE_BIT_S,
+        n_trials_per_period=10,
     )
     plot_breaking_point(bp_data)
 
