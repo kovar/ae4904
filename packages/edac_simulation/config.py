@@ -23,7 +23,7 @@ SEU_RATE_BIT_DAY_V1 = 1.40e-7  # initial SPENVIS estimate
 SEU_RATE_BIT_DAY_V2 = 2.88e-6  # revised SPENVIS value
 SEU_RATE_BIT_DAY_V3 = 3.09e-9  # mission-average SEU rate
 
-SEU_RATE_BIT_DAY = SEU_RATE_BIT_DAY_V3  # <-- active value
+SEU_RATE_BIT_DAY = SEU_RATE_BIT_DAY_V2  # <-- active value
 
 # Derived: SEU rate per bit per second
 SEU_RATE_BIT_S = SEU_RATE_BIT_DAY / 86400.0
@@ -72,6 +72,22 @@ SCRUB_BANDWIDTH_FRACTION = 0.20  # 20 % of interface reserved for scrubbing
 # ---------------------------------------------------------------------------
 # Simulation parameters
 # ---------------------------------------------------------------------------
+# REQ-06: uncorrectable BER threshold [/bit/s]
+# "The uncorrectable Bit Error Rate shall be less than 10^-12 /bit/s over the
+# mission lifetime."  The rate is normalised by both the total bit count and
+# mission duration, so it is comparable across missions of different lengths.
+BER_REQUIREMENT_BIT_S = 1e-12
+
+# ---------------------------------------------------------------------------
+# Bad Block Management (BBM)
+# ---------------------------------------------------------------------------
+# Factory bad block fraction (JEDEC JESD47 / MT29F256G08 datasheet: up to 2%)
+BBM_FACTORY_BAD_FRACTION = 0.02
+
+# Spare blocks reserved per chip for bad-block replacement (~3% of 32,768)
+BBM_SPARE_FRACTION = 0.03
+BBM_SPARE_BLOCKS_PER_CHIP = int(BLOCKS_PER_CHIP * BBM_SPARE_FRACTION)  # = 983
+
 N_MONTE_CARLO_TRIALS = 10  # Number of independent mission simulations
 RANDOM_SEED = 42  # For reproducibility
 

@@ -25,6 +25,7 @@ import numpy as np
 from tqdm import tqdm
 
 import config
+from bad_block_manager import BadBlockManager
 from nand_flash_model import NANDFlashModel
 from edac import BCHCodec
 from scrubbing import Scrubber
@@ -61,11 +62,15 @@ def run_one_trial(
 
     scrubber = Scrubber(memory, codec)
     injector = FaultInjector(memory, codec, scrubber, rng=rng)
+    # BBM uses an independent RNG stream so it doesn't perturb the SEU injection
+    # sequence when the same seed is used.
+    bbm = BadBlockManager(rng=np.random.default_rng(seed + 1_000_000))
 
     result = injector.orbital_injection_test(
         duration_s=config.MISSION_DURATION_S,
         scrub_period_s=scrub_period_s,
         seu_rate_bit_s=seu_rate_bit_s,
+        bbm=bbm,
     )
 
     # Scale up uncorrectable pages from sim slice to full memory array
@@ -139,13 +144,19 @@ def run_monte_carlo(
     total_corr = np.array([t["total_corrected"] for t in trials])
     total_inj = np.array([t["total_injected"] for t in trials])
 
-    # Uncorrectable BER over full memory array and full mission
-    # BER = uncorrectable bits / total bits
-    # Worst-case: assume each uncorrectable page has BCH_T+1 unrecoverable errors
+    # BBM aggregation (bbm_summary is None if trial predates BBM integration)
+    bbm_summaries: list[dict] = [s for t in trials if (s := t.get("bbm_summary"))]
+    bbm_factory_bad = [s["factory_bad"] for s in bbm_summaries]
+    bbm_runtime_bad = [s["runtime_bad"] for s in bbm_summaries]
+    bbm_any_exhausted = any(s["spares_exhausted"] for s in bbm_summaries)
+
+    # Uncorrectable BER [/bit/s] scaled to full memory array.
+    # BER = uncorrectable_bits / total_bits / mission_duration_s
+    # Worst-case: assume each uncorrectable page has BCH_T+1 unrecoverable errors.
     uncorr_bits_sim = uncorr_pages * (config.BCH_T + 1) * config.SECTORS_PER_PAGE
     scale = config.TOTAL_BITS / config.SIM_TOTAL_BITS
     uncorr_bits_full = uncorr_bits_sim * scale
-    ber_full = uncorr_bits_full / config.TOTAL_BITS
+    ber_full = uncorr_bits_full / config.TOTAL_BITS / config.MISSION_DURATION_S
 
     summary = {
         "config": {
@@ -162,13 +173,20 @@ def run_monte_carlo(
         "mean_uncorr_pages": float(np.mean(uncorr_pages)),
         "max_uncorr_pages": int(np.max(uncorr_pages)),
         "trials_with_uncorr_event": int(np.sum(uncorr_pages > 0)),
-        # -- BER at 64 GB scale --
+        # -- BER [/bit/s] at 64 GB scale --
         "mean_ber_full_memory": float(np.mean(ber_full)),
         "p95_ber_full_memory": float(np.percentile(ber_full, 95)),
         "max_ber_full_memory": float(np.max(ber_full)),
-        # -- REQ-06 compliance --
-        "req06_threshold": 1e-12,
-        "req06_pass": bool(np.max(ber_full) < 1e-12),
+        # -- REQ-06 BER compliance (threshold in /bit/s) --
+        "req06_threshold": config.BER_REQUIREMENT_BIT_S,
+        "req06_pass": bool(np.max(ber_full) < config.BER_REQUIREMENT_BIT_S),
+        # -- REQ-06 BBM compliance --
+        "bbm_mean_factory_bad": float(np.mean(bbm_factory_bad))
+        if bbm_factory_bad
+        else 0.0,
+        "bbm_max_runtime_bad": int(np.max(bbm_runtime_bad)) if bbm_runtime_bad else 0,
+        "bbm_any_exhausted": bbm_any_exhausted,
+        "bbm_spare_blocks_per_chip": config.BBM_SPARE_BLOCKS_PER_CHIP,
         # -- raw arrays for plotting --
         "raw_uncorr_pages": uncorr_pages.tolist(),
         "raw_ber_full": ber_full.tolist(),
@@ -244,12 +262,17 @@ def _print_summary(s: dict) -> None:
     print(f"  Trials with any uncorr. event:     {s['trials_with_uncorr_event']}")
     print()
     total_gb = config.NAND_TOTAL_CAPACITY_GB
-    print(f"  BER ({total_gb} GB, mean):   {s['mean_ber_full_memory']:.2e}")
-    print(f"  BER ({total_gb} GB, P95):    {s['p95_ber_full_memory']:.2e}")
-    print(f"  BER ({total_gb} GB, max):    {s['max_ber_full_memory']:.2e}")
+    print(f"  BER ({total_gb} GB, mean):   {s['mean_ber_full_memory']:.2e} /bit/s")
+    print(f"  BER ({total_gb} GB, P95):    {s['p95_ber_full_memory']:.2e} /bit/s")
+    print(f"  BER ({total_gb} GB, max):    {s['max_ber_full_memory']:.2e} /bit/s")
     print()
     status = "PASS" if s["req06_pass"] else "FAIL"
-    print(f"  REQ-06 (BER < 1e-12):  {status}")
+    print(f"  REQ-06 (BER < {s['req06_threshold']:.0e} /bit/s):  {status}")
+    print()
+    print(f"  BBM factory bad (mean):  {s.get('bbm_mean_factory_bad', 0):.0f} blocks")
+    print(f"  BBM runtime bad (max):   {s.get('bbm_max_runtime_bad', 0)}")
+    bbm_status = "PASS" if not s.get("bbm_any_exhausted", False) else "FAIL"
+    print(f"  REQ-06 BBM (spares ok):  {bbm_status}")
     print("=" * 60)
 
 

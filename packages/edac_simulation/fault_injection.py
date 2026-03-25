@@ -17,6 +17,7 @@ import numpy as np
 from numpy.random import Generator
 
 import config
+from bad_block_manager import BadBlockManager
 from nand_flash_model import NANDFlashModel
 from edac import BCHCodec
 from radiation_model import RadiationModel
@@ -192,6 +193,7 @@ class FaultInjector:
         duration_s: float = config.MISSION_DURATION_S,
         scrub_period_s: float = config.SCRUB_PERIOD_S,
         seu_rate_bit_s: float = config.SEU_RATE_BIT_S,
+        bbm: BadBlockManager | None = None,
     ) -> dict:
         """
         Simulate the full mission at the orbital SEU rate with periodic scrubbing.
@@ -236,6 +238,11 @@ class FaultInjector:
             total_uncorr_pages += result["uncorrectable_pages"]
             n_scrub_passes += 1
 
+            # Notify BBM of any uncorrectable pages found this pass
+            if bbm is not None and result["uncorrectable_pages"] > 0:
+                scale = config.TOTAL_PAGES / self.memory.n_pages
+                bbm.register_uncorrectable(result["uncorrectable_pages"], scale)
+
             scrub_log.append(
                 {
                     "time_s": t,
@@ -253,13 +260,14 @@ class FaultInjector:
             "total_uncorr_pages": total_uncorr_pages,
             "residual_errors": self.memory.total_error_count(),
             "scrub_log": scrub_log,
-            # BER = uncorrectable bits / total bits / duration (extrapolated to 64 GB)
+            # BER [/bit/s] = uncorrectable bits / total bits / duration_s
             "uncorrectable_ber": (
                 total_uncorr_pages
                 * config.BCH_T
                 * config.SECTORS_PER_PAGE
-                / (self.memory.total_bits * (duration_s / 86400 / 365.25))
+                / (self.memory.total_bits * duration_s)
             )
             if total_uncorr_pages > 0
             else 0.0,
+            "bbm_summary": bbm.summary if bbm is not None else None,
         }

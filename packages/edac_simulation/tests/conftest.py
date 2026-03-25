@@ -12,6 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
+from bad_block_manager import BadBlockManager
 from edac import BCHCodec
 from nand_flash_model import NANDFlashModel
 from scrubbing import Scrubber
@@ -58,3 +59,16 @@ def filled_memory(memory: NANDFlashModel) -> NANDFlashModel:
 def scrubber(filled_memory: NANDFlashModel, codec: BCHCodec) -> Scrubber:
     """Scrubber attached to filled_memory with encoded ECC."""
     return Scrubber(filled_memory, codec)
+
+
+@pytest.fixture
+def bbm(rng: np.random.Generator) -> BadBlockManager:
+    """Small-scale BBM (200 blocks, 10 spares) for fast unit tests."""
+    return BadBlockManager(
+        total_blocks_per_chip=100,
+        n_chips=2,
+        pages_per_block=4,
+        spare_blocks_per_chip=10,
+        factory_bad_fraction=0.05,
+        rng=rng,
+    )

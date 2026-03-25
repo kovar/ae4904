@@ -95,8 +95,8 @@ slow for Monte Carlo. `BCHCodec` has two modes:
 Two SPENVIS values are defined in `config.py`; select the active one:
 
 ```python
-SEU_RATE_BIT_DAY_V1 = 1.4e-7      # initial estimate
-SEU_RATE_BIT_DAY_V2 = 2.8775e-6   # revised value
+SEU_RATE_BIT_DAY_V1 = 1.40e-7      # initial estimate
+SEU_RATE_BIT_DAY_V2 = 2.88e-6   # revised value
 
 SEU_RATE_BIT_DAY = SEU_RATE_BIT_DAY_V2   # <-- active
 ```

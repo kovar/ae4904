@@ -65,7 +65,11 @@ def plot_ber_vs_scrub_period(
         periods, ber_p95, "s--", label=f"P95 BER ({total_gb} GB)", color="darkorange"
     )
     ax.axhline(
-        1e-12, color="red", linewidth=1.5, linestyle=":", label="REQ-06 limit (10⁻¹²)"
+        config.BER_REQUIREMENT_BIT_S,
+        color="red",
+        linewidth=1.5,
+        linestyle=":",
+        label=f"REQ-06 limit ({config.BER_REQUIREMENT_BIT_S:.0e} bit⁻¹ s⁻¹)",
     )
 
     # Shade the passing region
@@ -85,7 +89,7 @@ def plot_ber_vs_scrub_period(
             ax.plot(p, bm, "rx", markersize=10, markeredgewidth=2)
 
     ax.set_xlabel("Scrubbing Period [hours]")
-    ax.set_ylabel("Uncorrectable BER (over 2-year mission)")
+    ax.set_ylabel("Uncorrectable BER [bit⁻¹ s⁻¹]")
     ax.set_title(
         f"Uncorrectable BER vs. Scrubbing Period\n"
         f"BCH(t={config.BCH_T}), {config.ORBIT_ALTITUDE_KM} km SSO, SEU rate = "
@@ -160,6 +164,11 @@ def plot_breaking_point(sweep_data: list[dict], save: bool = True) -> plt.Figure
     uncorr_frac = np.array([d["mean_uncorr_fraction"] for d in sweep_data])
     uncorr_std = np.array([d["std_uncorr_fraction"] for d in sweep_data])
 
+    # Chip-specific reference BER values (Micron MT29F256G08 SLC NAND)
+    # Datasheet guaranteed raw BER: ~1e-6 (fresh) to ~1e-3 (end-of-life)
+    CHIP_BER_FRESH = 1e-6
+    CHIP_BER_EOL = 1e-3
+
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.semilogx(
         bers,
@@ -184,17 +193,37 @@ def plot_breaking_point(sweep_data: list[dict], save: bool = True) -> plt.Figure
                 color="red",
                 linestyle="--",
                 linewidth=1.5,
-                label=f"Breaking point ≈ {d['ber']:.1e}",
+                label=f"Breaking point ≈ {d['ber']:.1e} bit⁻¹",
             )
             break
 
-    ax.axhline(1.0, color="orange", linestyle=":", linewidth=1, label="1 % threshold")
-    ax.set_xlabel("Injected BER")
+    # Chip operating range
+    ax.axvline(
+        CHIP_BER_FRESH,
+        color="green",
+        linestyle=":",
+        linewidth=1.2,
+        label=f"MT29F256G08 fresh BER ≈ {CHIP_BER_FRESH:.0e} bit⁻¹",
+    )
+    ax.axvline(
+        CHIP_BER_EOL,
+        color="goldenrod",
+        linestyle=":",
+        linewidth=1.2,
+        label=f"MT29F256G08 EOL BER ≈ {CHIP_BER_EOL:.0e} bit⁻¹",
+    )
+
+    ax.axhline(
+        1.0, color="orange", linestyle=":", linewidth=1, label="1 % failure threshold"
+    )
+    ax.set_xlabel("Injected BER [bit⁻¹]")
     ax.set_ylabel("Uncorrectable Pages [%]")
     ax.set_title(
-        f"Fault Injection Breaking-Point Analysis\nBCH(t={config.BCH_T}) per {config.SECTOR_DATA_BYTES}-byte sector"
+        f"Fault Injection Breaking-Point Analysis\n"
+        f"BCH(t={config.BCH_T}) / {config.SECTOR_DATA_BYTES}-byte sector, "
+        f"Micron MT29F256G08 SLC NAND"
     )
-    ax.legend()
+    ax.legend(fontsize=9)
     ax.set_ylim(bottom=0)
 
     fig.tight_layout()
@@ -276,17 +305,25 @@ def verification_matrix(monte_carlo_summary: dict, save: bool = True) -> pd.Data
         {
             "Requirement": "REQ-06 (BBM)",
             "Description": "Bad Block Management table for damaged sectors",
-            "Verification Method": "TBD",
-            "Result / Evidence": "Not yet simulated",
-            "Status": "TBD",
+            "Verification Method": f"Monte Carlo simulation ({s['config']['n_trials']} trials)",
+            "Result / Evidence": (
+                f"Factory bad ≈ {s.get('bbm_mean_factory_bad', 0):.0f} blocks "
+                f"({s.get('bbm_mean_factory_bad', 0) / (config.BLOCKS_PER_CHIP * config.NAND_NUM_CHIPS) * 100:.1f}% "
+                f"of {config.BLOCKS_PER_CHIP * config.NAND_NUM_CHIPS} total); "
+                f"runtime bad ≤ {s.get('bbm_max_runtime_bad', 0)} blocks; "
+                f"spare pool: {config.BBM_SPARE_BLOCKS_PER_CHIP} blocks/chip "
+                f"({config.BBM_SPARE_FRACTION:.0%} reserved)"
+            ),
+            "Status": "PASS" if not s.get("bbm_any_exhausted", True) else "FAIL",
         },
         {
             "Requirement": "REQ-06 (BER)",
-            "Description": "Uncorrectable BER < 10⁻¹²",
+            "Description": f"Uncorrectable BER < {config.BER_REQUIREMENT_BIT_S:.0e} bit⁻¹ s⁻¹",
             "Verification Method": f"Monte Carlo simulation ({s['config']['n_trials']} trials)",
             "Result / Evidence": (
-                f"Max BER = {max_ber:.2e} over {config.MISSION_DURATION_YEARS}-year mission "
-                f"({config.NAND_TOTAL_CAPACITY_GB} GB scaled)"
+                f"Max BER = {max_ber:.2e} bit⁻¹ s⁻¹ "
+                f"({config.MISSION_DURATION_YEARS}-year mission, "
+                f"{config.NAND_TOTAL_CAPACITY_GB} GB scaled)"
             ),
             "Status": "PASS" if s.get("req06_pass", False) else "FAIL",
         },
@@ -348,7 +385,7 @@ def quick_demo() -> None:
     scrubber = Scrubber(memory, codec)
     injector = FaultInjector(memory, codec, scrubber, rng=rng)
     bp_data = injector.breaking_point_sweep(
-        ber_values=np.logspace(-9, -3, 20),
+        ber_values=np.logspace(-6, -3, 30),  # MT29F256G08 fresh → EOL operating range
         n_trials_per_ber=10,
     )
     plot_breaking_point(bp_data)
